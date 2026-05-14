@@ -1,0 +1,9 @@
+[project]
+name = "stir-challenge-2026-metrics"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.23.5",
+    "matplotlib>=3.7",
+    "tabulate>=0.9",
+]
