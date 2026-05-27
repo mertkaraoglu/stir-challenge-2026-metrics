@@ -33,8 +33,9 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
 import matplotlib
+import numpy as np
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from tabulate import tabulate
@@ -89,7 +90,13 @@ def _process_mono_sequence(
     seq_id: str,
     seq_tracks: dict,
     data_dir: Path,
-) -> tuple[dict[str, float], list[np.ndarray], list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
+) -> tuple[
+    dict[str, float],
+    list[np.ndarray],
+    list[np.ndarray],
+    list[np.ndarray],
+    list[np.ndarray],
+]:
     seq_dir = data_dir / seq_id
     annotations = _load_annotations(seq_dir)
 
@@ -100,6 +107,9 @@ def _process_mono_sequence(
 
     for frame_idx_str, frame_data in seq_tracks.items():
         frame_idx = int(frame_idx_str)
+        # Skip the first frame (it's the reference frame)
+        if frame_idx == 0:
+            continue
         if frame_idx not in annotations:
             continue
         ann = annotations[frame_idx]
@@ -127,7 +137,13 @@ def _process_stereo_sequence(
     seq_id: str,
     seq_tracks: dict,
     data_dir: Path,
-) -> tuple[dict[str, float], list[np.ndarray], list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
+) -> tuple[
+    dict[str, float],
+    list[np.ndarray],
+    list[np.ndarray],
+    list[np.ndarray],
+    list[np.ndarray],
+]:
     seq_dir = data_dir / seq_id
     annotations = _load_annotations(seq_dir)
     calib = _load_calib(seq_dir)
@@ -139,6 +155,9 @@ def _process_stereo_sequence(
 
     for frame_idx_str, frame_data in seq_tracks.items():
         frame_idx = int(frame_idx_str)
+        # Skip the first frame (it's the reference frame)
+        if frame_idx == 0:
+            continue
         if frame_idx not in annotations:
             continue
         ann = annotations[frame_idx]
@@ -162,7 +181,9 @@ def _process_stereo_sequence(
     flat_pred = np.concatenate(loc_pred_frames)
     flat_vpred = np.concatenate(vis_pred_frames)
 
-    metrics = compute_metrics(flat_gt, flat_vgt, flat_pred, flat_vpred, STEREO_THRESHOLDS)
+    metrics = compute_metrics(
+        flat_gt, flat_vgt, flat_pred, flat_vpred, STEREO_THRESHOLDS
+    )
     return metrics, [flat_gt], [flat_vgt], [flat_pred], [flat_vpred]
 
 
@@ -227,7 +248,10 @@ def _compute_and_save(
     with open(metrics_path, "w") as fh:
         json.dump(output, fh, indent=2)
     print(f"  saved {metrics_path}")
-    print(f"  aj_avg={overall.get('aj_avg', 0):.4f}  ata_avg={overall.get('ata_avg', 0):.4f}  oa={overall.get('oa', 0):.4f}", end="")
+    print(
+        f"  aj_avg={overall.get('aj_avg', 0):.4f}  ata_avg={overall.get('ata_avg', 0):.4f}  oa={overall.get('oa', 0):.4f}",
+        end="",
+    )
     if "p95_latency_ms" in overall:
         print(f"  p95={overall['p95_latency_ms']:.1f}ms", end="")
     print()
@@ -346,14 +370,18 @@ def _build_table_rows(all_metrics: list[dict], mode: str) -> list[list]:
     rows = []
     for m in all_metrics:
         overall = m["overall"]
-        rows.append([
-            mode,
-            m["model"],
-            f"{overall.get('aj_avg', 0):.4f}",
-            f"{overall.get('ata_avg', 0):.4f}",
-            f"{overall.get('oa', 0):.4f}",
-            f"{overall['p95_latency_ms']:.1f}" if "p95_latency_ms" in overall else "—",
-        ])
+        rows.append(
+            [
+                mode,
+                m["model"],
+                f"{overall.get('aj_avg', 0):.4f}",
+                f"{overall.get('ata_avg', 0):.4f}",
+                f"{overall.get('oa', 0):.4f}",
+                f"{overall['p95_latency_ms']:.1f}"
+                if "p95_latency_ms" in overall
+                else "—",
+            ]
+        )
     return rows
 
 
@@ -364,8 +392,12 @@ def _build_table_rows(all_metrics: list[dict], mode: str) -> list[list]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="STIR 2026 metrics runner")
-    parser.add_argument("results_dir", help="Root results directory (contains mono/ and stereo/)")
-    parser.add_argument("--data_dir", required=True, help="Dataset root directory (for GT annotations)")
+    parser.add_argument(
+        "results_dir", help="Root results directory (contains mono/ and stereo/)"
+    )
+    parser.add_argument(
+        "--data_dir", required=True, help="Dataset root directory (for GT annotations)"
+    )
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
@@ -401,7 +433,9 @@ def main() -> None:
 
     # Phase 3: summary table
     headers = ["mode", "model", "AJ_avg", "ATA_avg", "OA", "p95_ms"]
-    rows = _build_table_rows(mono_metrics, "mono") + _build_table_rows(stereo_metrics, "stereo")
+    rows = _build_table_rows(mono_metrics, "mono") + _build_table_rows(
+        stereo_metrics, "stereo"
+    )
 
     print("\n" + tabulate(rows, headers=headers, tablefmt="github"))
 
